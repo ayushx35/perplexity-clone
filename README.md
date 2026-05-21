@@ -1,10 +1,4 @@
 
-
-# Perplexity AI Clone
-
-Perplexity AI is a conversational AI search engine that provides direct answers to your questions with citations and sources. This project is a clone of the frontend interface of Perplexity AI, built with React and TypeScript.
-
-
 ## Working
 
 https://github.com/user-attachments/assets/cd4954bf-c99c-4bbb-b6e7-2761dd6eb39c
