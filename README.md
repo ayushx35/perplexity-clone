@@ -2,6 +2,11 @@
 
 Perplexity AI is a conversational AI search engine that provides direct answers to your questions with citations and sources. This project is a clone of the frontend interface of Perplexity AI, built with React and TypeScript.
 
+
+# Working
+
+<video controls src="Screen Recording 2026-05-21 at 11.51.16 PM.mov" title="Title"></video>
+
 ## Features
 
 - **Modern UI**: Clean, minimalist design with a focus on readability.
