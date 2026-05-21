@@ -638,12 +638,15 @@
     }
 
     function parseLLMResponse(text) {
+      let cleanText = text.trim();
+      
+      // 1. Try standard JSON parsing
       try {
-        let cleanText = text.trim();
-        if (cleanText.startsWith('```')) {
-          cleanText = cleanText.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+        let jsonText = cleanText;
+        if (jsonText.startsWith('```')) {
+          jsonText = jsonText.replace(/^```(json)?/, '').replace(/```$/, '').trim();
         }
-        const parsed = JSON.parse(cleanText);
+        const parsed = JSON.parse(jsonText);
         if (parsed && typeof parsed === 'object') {
           return {
             answer: parsed.answer || parsed.response || text,
@@ -651,8 +654,44 @@
           };
         }
       } catch (e) {
-        console.warn("Failed to parse JSON response:", e);
+        // Fall through to regex/text parsing
       }
+
+      // 2. Try parsing custom text key-value format (answer: ..., followUps: [...])
+      const answerRegex = /(?:^|\n)(?:answer|Answer|RESPONSE|Response)\s*:\s*([\s\S]*?)(?=\n(?:followUps|followups|Followups|Follow Ups)\s*:|$)/i;
+      const followUpsRegex = /(?:followUps|followups|Followups|Follow Ups)\s*:\s*\[([\s\S]*?)\]/i;
+
+      const answerMatch = cleanText.match(answerRegex);
+      const followUpsMatch = cleanText.match(followUpsRegex);
+
+      if (answerMatch || followUpsMatch) {
+        let answerVal = answerMatch ? answerMatch[1].trim() : '';
+        let followUpsList = [];
+
+        if (followUpsMatch) {
+          const rawList = followUpsMatch[1].trim();
+          const itemRegex = /"(.*?)"|'(.*?)'/g;
+          let match;
+          while ((match = itemRegex.exec(rawList)) !== null) {
+            followUpsList.push(match[1] || match[2]);
+          }
+          if (followUpsList.length === 0 && rawList) {
+            followUpsList = rawList
+              .split(/[\n,]+/)
+              .map(item => item.replace(/^\s*[-*>]?\s*/, '').trim())
+              .filter(item => item.length > 0);
+          }
+        }
+
+        if (answerVal || followUpsList.length > 0) {
+          return {
+            answer: answerVal || text,
+            followUps: followUpsList
+          };
+        }
+      }
+
+      // 3. Fallback: treat whole text as answer
       return {
         answer: text,
         followUps: []
