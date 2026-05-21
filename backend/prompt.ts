@@ -4,10 +4,11 @@ a bunch of web search responses, try to answer the user query to the best of you
 YOU DONT HAVE ACCESS TO ANY TOOLS.You are being given all the context that is needed to answer the query.
 You also need to return follow up questions to the user based on the question they have asked.
 The response needs to be structured like this - 
-{
-    followUps: [string], 
-    answer: string
-}`
+
+    
+    answer: string,
+    followUps: [string]
+`
 
 
 export const PROMPT_TEMPLATE = `

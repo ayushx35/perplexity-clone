@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Purplexity - Retro Terminal Chat</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+    :root {
+      --bg-color: #050505;
+      --text-color: #f0f0f0;
+      --text-glow: 0 0 4px rgba(240, 240, 240, 0.6);
+      --border-color: #f0f0f0;
+      --accent-color: #888888;
+      --dark-accent: #222222;
+      --glow-active: 1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Share Tech Mono', 'Courier New', Courier, monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Screen glow & flicker */
+    body::after {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.4) 100%);
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Scanlines */
+    .crt-scanlines {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.03),
+        rgba(0, 255, 0, 0.01),
+        rgba(0, 0, 255, 0.03)
+      );
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
+
+    /* CRT Flicker */
+    @keyframes crt-flicker {
+      0% { opacity: 0.985; }
+      50% { opacity: 0.995; }
+      100% { opacity: 0.985; }
+    }
+    
+    .flicker-active {
+      animation: crt-flicker 0.15s infinite;
+    }
+
+    .crt-off .crt-scanlines {
+      opacity: 0 !important;
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: 
+        radial-gradient(rgba(240, 240, 240, 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(240, 240, 240, 0.01) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(240, 240, 240, 0.01) 1px, transparent 1px);
+      background-size: 20px 20px, 40px 40px, 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Layout */
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+      border: 4px double var(--border-color);
+      z-index: 1;
+      position: relative;
+    }
+
+    /* Top Status Bar */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 12px;
+      border-bottom: 2px solid var(--border-color);
+      background-color: #0c0c0c;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status-bar .section {
+      display: flex;
+      gap: 16px;
+    }
+
+    .status-bar span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-bar .blink-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--text-color);
+      border-radius: 50%;
+      animation: led-blink 1.2s infinite steps(1);
+    }
+
+    @keyframes led-blink {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 1; }
+    }
+
+    /* Main workspace */
+    .main-workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      border-right: 2px solid var(--border-color);
+      background-color: #050505;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      overflow-y: auto;
+      gap: 20px;
+    }
+
+    .sidebar-section {
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      position: relative;
+      background-color: #090909;
+    }
+
+    .sidebar-title {
+      position: absolute;
+      top: -10px;
+      left: 10px;
+      background-color: var(--bg-color);
+      padding: 0 6px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    .system-stats {
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .btn-control {
+      width: 100%;
+      background: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s ease;
+      margin-bottom: 8px;
+    }
+
+    .btn-control:hover {
+      background-color: var(--text-color);
+      color: var(--bg-color);
+      box-shadow: var(--text-glow);
+    }
+
+    .btn-control.active {
+      background-color: var(--text-color);
+      color: var(--bg-color);
+    }
+
+    /* Chat Container */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #000;
+      position: relative;
+    }
+
+    .terminal-output {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    /* Custom retro scrollbar */
+    .terminal-output::-webkit-scrollbar,
+    .sidebar::-webkit-scrollbar {
+      width: 12px;
+    }
+    .terminal-output::-webkit-scrollbar-track,
+    .sidebar::-webkit-scrollbar-track {
+      background: #0d0d0d;
+      border-left: 1px solid var(--border-color);
+    }
+    .terminal-output::-webkit-scrollbar-thumb,
+    .sidebar::-webkit-scrollbar-thumb {
+      background: var(--text-color);
+      border: 2px solid #0d0d0d;
+    }
+
+    .terminal-log-entry {
+      border-left: 2px solid var(--accent-color);
+      padding-left: 10px;
+      margin-bottom: 4px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    .message {
+      padding: 10px;
+      border: 1px solid transparent;
+      white-space: pre-wrap;
+    }
+
+    .message.user {
+      border: 1px dashed var(--border-color);
+      background-color: #0d0d0d;
+    }
+
+    .message.bot {
+      border: 1px solid var(--border-color);
+      background-color: #050505;
+      box-shadow: 2px 2px 0 var(--border-color);
+    }
+
+    .message-header {
+      font-weight: bold;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Suggestions / Follow-ups */
+    .followup-section {
+      margin-top: 14px;
+      border-top: 1px dashed var(--accent-color);
+      padding-top: 10px;
+    }
+    .followup-header {
+      font-size: 0.8rem;
+      color: var(--accent-color);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .followup-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .followup-btn {
+      background: transparent;
+      color: var(--text-color);
+      border: 1px solid transparent;
+      text-align: left;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 4px 6px;
+      transition: all 0.2s ease;
+      width: fit-content;
+    }
+    .followup-btn:hover {
+      background-color: var(--text-color);
+      color: var(--bg-color);
+      border-color: var(--border-color);
+    }
+
+    /* Chat Input Bar */
+    .input-bar {
+      display: flex;
+      align-items: center;
+      padding: 14px;
+      border-top: 2px solid var(--border-color);
+      background-color: #090909;
+      gap: 10px;
+    }
+
+    .prompt-symbol {
+      font-size: 1.1rem;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-color);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.05rem;
+      outline: none;
+      caret-color: var(--text-color);
+    }
+
+    .btn-send {
+      background: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 6px 16px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s ease;
+    }
+
+    .btn-send:hover {
+      background-color: var(--text-color);
+      color: var(--bg-color);
+      box-shadow: var(--text-glow);
+    }
+
+    /* Cursor animation */
+    .blinking-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 15px;
+      background-color: var(--text-color);
+      animation: cursor-blink 0.8s infinite steps(1);
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+
+    @keyframes cursor-blink {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+
+    /* Boot sequence overlay */
+    .boot-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-color: var(--bg-color);
+      z-index: 100;
+      padding: 30px;
+      font-family: 'VT323', monospace;
+      font-size: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .boot-line {
+      opacity: 0;
+      animation: fade-in 0.05s forwards;
+    }
+
+    @keyframes fade-in {
+      to { opacity: 1; }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Glow effect class toggles */
+    .glow-active body,
+    .glow-active .status-bar,
+    .glow-active .sidebar-section,
+    .glow-active .message,
+    .glow-active .btn-control,
+    .glow-active .btn-send,
+    .glow-active .suggestion-tag {
+      text-shadow: var(--text-glow);
+      box-shadow: 0 0 2px rgba(240, 240, 240, 0.2);
+    }
+
+    .glow-active .message.bot {
+      box-shadow: 2px 2px 0 var(--border-color), 0 0 5px rgba(255,255,255,0.1);
+    }
+
+    /* Query History List */
+    .history-list {
+      list-style-type: none;
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      color: var(--accent-color);
+      transition: color 0.2s ease;
+    }
+
+    .history-item:hover {
+      color: var(--text-color);
+      text-decoration: underline;
+    }
+
+  </style>
+</head>
+<body class="glow-active">
+  <div class="crt-scanlines flicker-active"></div>
+  <div class="grid-bg"></div>
+
+  <div class="app-wrapper">
+    <!-- Top Bar -->
+    <header class="status-bar">
+      <div class="section">
+        <span><span class="blink-dot"></span> SYSTEM: ONLINE</span>
+        <span>PORT: 3000</span>
+        <span>OS: PURPLEXITY v1.0.9</span>
+      </div>
+      <div class="section">
+        <span>CRT: <b id="crt-status-lbl">ON</b></span>
+        <span>GLOW: <b id="glow-status-lbl">ON</b></span>
+      </div>
+    </header>
+
+    <div class="main-workspace">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-title">Controls</div>
+          <button class="btn-control active" id="toggle-crt">CRT SCANLINES [ON]</button>
+          <button class="btn-control active" id="toggle-glow">SCREEN GLOW [ON]</button>
+          <button class="btn-control" id="clear-chat">PURGE STORAGE</button>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-title">System Status</div>
+          <div class="system-stats">
+            <div class="stat-row"><span>CPU LOAD:</span><span id="cpu-load">12%</span></div>
+            <div class="stat-row"><span>MEM FREE:</span><span id="mem-free">8392 KB</span></div>
+            <div class="stat-row"><span>TAVILY PIN:</span><span id="ping-time">142ms</span></div>
+            <div class="stat-row"><span>MODEL:</span><span>WEB-AI-120B</span></div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-title">Query Archive</div>
+          <ul class="history-list" id="history-ul">
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
+      </aside>
+
+      <!-- Main Chat Terminal -->
+      <main class="chat-container">
+        <!-- Interactive Boot Screen -->
+        <div class="boot-overlay" id="boot-screen"></div>
+
+        <div class="terminal-output" id="terminal-chat">
+          <!-- Chat messages go here -->
+        </div>
+
+        <!-- Input command line -->
+        <div class="input-bar">
+          <span class="prompt-symbol">USER@PURPLEXITY:~$</span>
+          <input type="text" id="userInput" class="chat-input" placeholder="Type query / command..." autocomplete="off" autofocus />
+          <button class="btn-send" id="sendBtn">EXECUTE</button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const bootScreen = document.getElementById('boot-screen');
+    const chatEl = document.getElementById('terminal-chat');
+    const inputEl = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const historyUl = document.getElementById('history-ul');
+    
+    // Status elements
+    const cpuEl = document.getElementById('cpu-load');
+    const memEl = document.getElementById('mem-free');
+    const pingEl = document.getElementById('ping-time');
+
+    // Controls
+    const toggleCrt = document.getElementById('toggle-crt');
+    const toggleGlow = document.getElementById('toggle-glow');
+    const clearChat = document.getElementById('clear-chat');
+    const crtStatusLbl = document.getElementById('crt-status-lbl');
+    const glowStatusLbl = document.getElementById('glow-status-lbl');
+
+    let isBooted = false;
+    let queryHistory = JSON.parse(localStorage.getItem('perplexity_history') || '[]');
+
+    // Boot lines simulation
+    const bootLines = [
+      "PURPLEXITY OS v1.0.9 (C) 1994-1996 PURPLEX INC.",
+      "--------------------------------------------------",
+      "CPU: INTEL i486 DX2-66 PROCESSOR OK",
+      "CONVENTIONAL MEMORY: 640 KB OK",
+      "EXTENDED MEMORY: 15360 KB OK",
+      "TOTAL MEMORY: 16384 KB OK",
+      "DETECTING HARDWARE...",
+      "  PRIMARY MASTER: TAVILY WEB SEARCH PROVIDER v0.7.3",
+      "  PRIMARY SLAVE: OPENAI LLM AGENTS ENGINE",
+      "INITIALIZING PORT 3000 NETWORK CONNECTIVITY...",
+      "CONNECTING TO GATEWAY HTTP://LOCALHOST:3000... OK",
+      "LOADING SYSTEM DICTIONARIES...",
+      "SYSTEM STATUS: ONLINE. READY FOR INSTRUCTION.",
+      "--------------------------------------------------",
+      "TYPE A QUESTION AND PRESS 'EXECUTE' TO SEARCH THE CYBER-SPACE.",
+      " "
+    ];
+
+    // Play boot sequence
+    function playBootSequence() {
+      let delay = 0;
+      bootLines.forEach((line) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = 'boot-line';
+          div.textContent = line;
+          bootScreen.appendChild(div);
+          bootScreen.scrollTop = bootScreen.scrollHeight;
+        }, delay);
+        delay += 60 + Math.random() * 80;
+      });
+
+      setTimeout(() => {
+        bootScreen.classList.add('hidden');
+        isBooted = true;
+        loadSavedChat();
+        updateHistoryUI();
+        inputEl.focus();
+      }, delay + 200);
+    }
+
+    // Toggle controls
+    toggleCrt.addEventListener('click', () => {
+      document.body.classList.toggle('crt-off');
+      const isOff = document.body.classList.contains('crt-off');
+      toggleCrt.classList.toggle('active', !isOff);
+      toggleCrt.textContent = `CRT SCANLINES [${isOff ? 'OFF' : 'ON'}]`;
+      crtStatusLbl.textContent = isOff ? 'OFF' : 'ON';
+    });
+
+    toggleGlow.addEventListener('click', () => {
+      document.body.classList.toggle('glow-active');
+      const isActive = document.body.classList.contains('glow-active');
+      toggleGlow.classList.toggle('active', isActive);
+      toggleGlow.textContent = `SCREEN GLOW [${isActive ? 'ON' : 'OFF'}]`;
+      glowStatusLbl.textContent = isActive ? 'ON' : 'OFF';
+    });
+
+    clearChat.addEventListener('click', () => {
+      if (confirm("PURGE CORE CHAT RECORDS AND SEARCH HISTORY?")) {
+        localStorage.removeItem('perplexity_history');
+        localStorage.removeItem('perplexity_messages');
+        queryHistory = [];
+        chatEl.innerHTML = '';
+        updateHistoryUI();
+        logEvent('SYSTEM CODES RESETS... STORAGE CLEARED.');
+      }
+    });
+
+    // Update background metrics
+    setInterval(() => {
+      if (!isBooted) return;
+      const cpu = Math.floor(8 + Math.random() * 15);
+      const mem = Math.floor(7500 + Math.random() * 1000);
+      const ping = Math.floor(100 + Math.random() * 90);
+      cpuEl.textContent = `${cpu}%`;
+      memEl.textContent = `${mem} KB`;
+      pingEl.textContent = `${ping}ms`;
+    }, 3000);
+
+    // Logging sub-actions to console view
+    function logEvent(text) {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      const entry = document.createElement('div');
+      entry.className = 'terminal-log-entry';
+      entry.textContent = `[${timeStr}] ${text}`;
+      chatEl.appendChild(entry);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function parseLLMResponse(text) {
+      try {
+        let cleanText = text.trim();
+        if (cleanText.startsWith('```')) {
+          cleanText = cleanText.replace(/^```(json)?/, '').replace(/```$/, '').trim();
+        }
+        const parsed = JSON.parse(cleanText);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            answer: parsed.answer || parsed.response || text,
+            followUps: Array.isArray(parsed.followUps) ? parsed.followUps : (Array.isArray(parsed.followups) ? parsed.followups : [])
+          };
+        }
+      } catch (e) {
+        console.warn("Failed to parse JSON response:", e);
+      }
+      return {
+        answer: text,
+        followUps: []
+      };
+    }
+
+    function renderFollowUpsImmediate(msgElement, followUps) {
+      if (!followUps || followUps.length === 0) {
+        saveMessages();
+        return;
+      }
+      
+      const section = document.createElement('div');
+      section.className = 'followup-section';
+      
+      const header = document.createElement('div');
+      header.className = 'followup-header';
+      header.textContent = '> SUGGESTED FOLLOW-UPS:';
+      section.appendChild(header);
+      
+      const list = document.createElement('div');
+      list.className = 'followup-list';
+      
+      followUps.forEach((q) => {
+        const btn = document.createElement('button');
+        btn.className = 'followup-btn';
+        btn.textContent = `> ${q}`;
+        btn.addEventListener('click', () => {
+          sendMessage(q);
+        });
+        list.appendChild(btn);
+      });
+      
+      section.appendChild(list);
+      msgElement.appendChild(section);
+      saveMessages();
+    }
+
+    function renderFollowUpsAnimated(msgElement, followUps) {
+      if (!followUps || followUps.length === 0) {
+        saveMessages();
+        return;
+      }
+
+      const section = document.createElement('div');
+      section.className = 'followup-section';
+      
+      const header = document.createElement('div');
+      header.className = 'followup-header';
+      header.textContent = '> SUGGESTED FOLLOW-UPS:';
+      section.appendChild(header);
+      
+      const list = document.createElement('div');
+      list.className = 'followup-list';
+      section.appendChild(list);
+      msgElement.appendChild(section);
+      chatEl.scrollTop = chatEl.scrollHeight;
+
+      let qIndex = 0;
+      
+      function renderNextQuestion() {
+        if (qIndex >= followUps.length) {
+          saveMessages();
+          return;
+        }
+        
+        const qText = followUps[qIndex];
+        const btn = document.createElement('button');
+        btn.className = 'followup-btn';
+        btn.textContent = '> ';
+        list.appendChild(btn);
+        
+        btn.addEventListener('click', () => {
+          sendMessage(qText);
+        });
+
+        let charIndex = 0;
+        function typeQChar() {
+          if (charIndex < qText.length) {
+            btn.textContent += qText[charIndex];
+            charIndex++;
+            chatEl.scrollTop = chatEl.scrollHeight;
+            setTimeout(typeQChar, 5 + Math.random() * 8);
+          } else {
+            qIndex++;
+            setTimeout(renderNextQuestion, 200);
+          }
+        }
+        typeQChar();
+      }
+
+      renderNextQuestion();
+    }
+
+    function addMessage(text, role, animate = false) {
+      const msg = document.createElement('div');
+      msg.className = `message ${role}`;
+      msg.dataset.raw = text;
+      
+      const header = document.createElement('div');
+      header.className = 'message-header';
+      header.textContent = role === 'user' ? '--- SENDER: USER ---' : '--- SENDER: PURPLEXITY CO-PROCESSOR ---';
+      msg.appendChild(header);
+
+      const contentSpan = document.createElement('span');
+      msg.appendChild(contentSpan);
+
+      chatEl.appendChild(msg);
+      chatEl.scrollTop = chatEl.scrollHeight;
+
+      if (role === 'user') {
+        contentSpan.textContent = text;
+        saveMessages();
+        return;
+      }
+
+      const parsed = parseLLMResponse(text);
+
+      if (animate) {
+        let index = 0;
+        const cursor = document.createElement('span');
+        cursor.className = 'blinking-cursor';
+        msg.appendChild(cursor);
+
+        function typeChar() {
+          if (index < parsed.answer.length) {
+            contentSpan.textContent += parsed.answer[index];
+            index++;
+            chatEl.scrollTop = chatEl.scrollHeight;
+            setTimeout(typeChar, 6 + Math.random() * 8);
+          } else {
+            cursor.remove();
+            renderFollowUpsAnimated(msg, parsed.followUps);
+          }
+        }
+        typeChar();
+      } else {
+        contentSpan.textContent = parsed.answer;
+        renderFollowUpsImmediate(msg, parsed.followUps);
+      }
+    }
+
+    async function sendMessage(customQuery = '') {
+      if (!isBooted) return;
+      const query = (customQuery || inputEl.value).trim();
+      if (!query) return;
+
+      if (!customQuery) {
+        inputEl.value = '';
+      }
+
+      addMessage(query, 'user');
+
+      if (!queryHistory.includes(query)) {
+        queryHistory.unshift(query);
+        if (queryHistory.length > 15) queryHistory.pop();
+        localStorage.setItem('perplexity_history', JSON.stringify(queryHistory));
+        updateHistoryUI();
+      }
+
+      logEvent('INITIALIZING SYSTEM AGENT SEARCH DISPATCH...');
+      
+      const statusTimer1 = setTimeout(() => logEvent('QUERY ROUTED TO TAVILY GLOBAL WEB INDEX...'), 500);
+      const statusTimer2 = setTimeout(() => logEvent('COMPILING CONTEXT FROM TOP RETRIEVED SEGMENTS...'), 1200);
+      const statusTimer3 = setTimeout(() => logEvent('SYNTHESIZING FINAL RESPONSE VIA LLM AGENT...'), 2200);
+
+      try {
+        const baseUrl = window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+        const response = await fetch(`${baseUrl}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        clearTimeout(statusTimer1);
+        clearTimeout(statusTimer2);
+        clearTimeout(statusTimer3);
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          logEvent('RESPONSE VERIFIED. PARSING STREAM...');
+          addMessage(data.result || 'Empty response.', 'bot', true);
+        } else {
+          logEvent('ERROR DETECTED ON NODE PROTOCOL HANDLER.');
+          addMessage(`AGENT ERROR: ${data.error || 'UNHANDLED EXCEPTION'}`, 'bot');
+        }
+      } catch (e) {
+        clearTimeout(statusTimer1);
+        clearTimeout(statusTimer2);
+        clearTimeout(statusTimer3);
+        logEvent('CONNECTION LOSS DETECTED.');
+        addMessage('CRITICAL NETWORK FAULT: Could not reach the server host. Check gateway on port 3000.', 'bot');
+      }
+    }
+
+    function updateHistoryUI() {
+      historyUl.innerHTML = '';
+      queryHistory.forEach((q) => {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        li.textContent = `> ${q}`;
+        li.title = q;
+        li.addEventListener('click', () => sendMessage(q));
+        historyUl.appendChild(li);
+      });
+    }
+
+    function saveMessages() {
+      const messages = [];
+      const msgNodes = chatEl.querySelectorAll('.message');
+      msgNodes.forEach((node) => {
+        const role = node.classList.contains('user') ? 'user' : 'bot';
+        const text = node.dataset.raw || node.querySelector('span').textContent;
+        messages.push({ role, text });
+      });
+      localStorage.setItem('perplexity_messages', JSON.stringify(messages));
+    }
+
+    function loadSavedChat() {
+      const messages = JSON.parse(localStorage.getItem('perplexity_messages') || '[]');
+      if (messages.length === 0) {
+        logEvent('READY.');
+        return;
+      }
+      logEvent('RESTORING PRIOR STORAGE SESSIONS...');
+      messages.forEach((msg) => {
+        addMessage(msg.text, msg.role, false);
+      });
+    }
+
+    sendBtn.addEventListener('click', () => sendMessage());
+    inputEl.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Run boot sequence
+    playBootSequence();
+  </script>
+</body>
+</html>
