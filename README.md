@@ -7,7 +7,8 @@ Perplexity AI is a conversational AI search engine that provides direct answers 
 
 ## Working
 
-<video controls src="record.mov" title="Title"></video>
+https://github.com/user-attachments/assets/cd4954bf-c99c-4bbb-b6e7-2761dd6eb39c
+
 
 ## Features
 
