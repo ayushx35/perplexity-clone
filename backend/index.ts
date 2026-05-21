@@ -1,7 +1,7 @@
 const app = require('express');
 
 app.post("/chat", (req, res) => {
-
+    res.send("Hello server");
 });
 
 app.listen(3000, () => {
