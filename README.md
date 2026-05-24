@@ -30,17 +30,13 @@ https://github.com/user-attachments/assets/cd4954bf-c99c-4bbb-b6e7-2761dd6eb39c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ayushx35/perplexity-clone.git
-cd perplexity-clone
+git clone https://github.com/ayushx35/Proxity-AI
+cd Proxity-AI
 ```
 
 2. Install dependencies:
 ```bash
 npm install
-# or
-yarn install
-# or
-pnpm install
 ```
 
 ### Usage
@@ -61,10 +57,6 @@ pnpm dev
 To create a production build:
 ```bash
 npm run build
-# or
-yarn build
-# or
-pnpm build
 ```
 
 ## Project Structure
